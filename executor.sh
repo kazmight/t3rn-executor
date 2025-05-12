@@ -7,20 +7,31 @@ sudo apt install -y build-essential git screen wget || { echo "Failed to install
 
 # Download and extract the latest executor binary
 echo "Downloading and extracting T3rn executor..."
-wget -q --show-progress https://github.com/t3rn/executor-release/releases/download/v0.64.1/executor-linux-v0.64.1.tar.gz || { echo "Download failed"; exit 1; }
-tar -xvzf executor-linux-v0.64.1.tar.gz || { echo "Extraction failed"; exit 1; }
+wget -q --show-progress https://github.com/t3rn/executor-release/releases/download/v0.77.1/executor-linux-v0.77.1tar.gz || { echo "Download failed"; exit 1; }
+tar -xvzf executor-linux-v0.77.1tar.gz || { echo "Extraction failed"; exit 1; }
 cd executor/executor/bin || { echo "Directory change failed"; exit 1; }
 
 # Export environment variables
 echo "Setting environment variables..."
 export ENVIRONMENT=testnet
-export LOG_LEVEL=debug
+export APP_NAME=local
+export INSTANCE=alfa
+export PRIVATE_KEY_LOCAL=
+export EXECUTOR_ENABLED_ASSETS=eth,t3eth,t3mon,mon,sei,t3sei,t3usd,t3btc
+export NETWORKS_DISABLED=base,optimism,arbitrum,blast-sepolia
+export EXECUTOR_ENABLED_NETWORKS="arbitrum-sepolia,base-sepolia,optimism-sepolia,unichain-sepolia,l2rn,sei-testnet,monad-testnet"
+export EXECUTOR_MAX_L3_GAS_PRICE=2000
+export LOG_LEVEL=info
 export LOG_PRETTY=false
 export EXECUTOR_PROCESS_BIDS_ENABLED=true
 export EXECUTOR_PROCESS_ORDERS_ENABLED=true
 export EXECUTOR_PROCESS_CLAIMS_ENABLED=true
-export ENABLED_NETWORKS='arbitrum-sepolia,base-sepolia, optimism-sepolia,l2rn,unichain-sepolia'
-export EXECUTOR_MAX_L3_GAS_PRICE=2000
+export EXECUTOR_PROCESS_ORDERS_API_ENABLED=false
+export EXECUTOR_PROCESS_PENDING_ORDERS_FROM_API=false
+export EXECUTOR_PROCESS_BIDS_API_ENABLED=false
+export EXECUTOR_MIN_BALANCE_THRESHOLD_ETH=0
+export EXECUTOR_ENABLE_BIDDING_PROCESSING=false
+
 
 # Add RPC endpoints
 echo "Configuring RPC endpoints..."
