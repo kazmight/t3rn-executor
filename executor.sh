@@ -1,26 +1,110 @@
 #!/bin/bash
 
-# Update and install necessary packages
-echo "Updating system and installing dependencies..."
-sudo apt update && sudo apt upgrade -y || { echo "Failed to update system"; exit 1; }
-sudo apt install -y build-essential git screen wget || { echo "Failed to install packages"; exit 1; }
+# Prompt untuk user (default: root)
+read -p "Masukkan nama user untuk menjalankan executor (default: root): " EXECUTOR_USER
+EXECUTOR_USER=${EXECUTOR_USER:-root}
 
-# Download and extract the latest executor binary
-echo "Downloading and extracting T3rn executor..."
-wget -q --show-progress https://github.com/t3rn/executor-release/releases/download/v0.77.1/executor-linux-v0.77.1tar.gz || { echo "Download failed"; exit 1; }
-tar -xvzf executor-linux-v0.77.1tar.gz || { echo "Extraction failed"; exit 1; }
-cd executor/executor/bin || { echo "Directory change failed"; exit 1; }
+# Menghentikan dan menghapus service lama jika ada
+if systemctl list-units --full -all | grep -q "t3rn-executor.service"; then
+    sudo systemctl stop t3rn-executor.service
+    sudo systemctl disable t3rn-executor.service
+    sudo systemctl daemon-reload
+fi
 
-# Export environment variables
-echo "Setting environment variables..."
+# Menghapus file lama
+sudo rm -rf /home/$EXECUTOR_USER/t3rn
+sudo rm -rf /etc/systemd/system/t3rn-executor.service
+sudo rm -rf /etc/t3rn-executor.env
+
+# Prompt untuk Private Key
+while [[ -z "$PRIVATE_KEY_LOCAL" ]]; do
+    read -sp "Masukkan PRIVATE_KEY_LOCAL (tidak boleh kosong): " PRIVATE_KEY_LOCAL
+    echo ""
+done
+
+# Prompt Gas Price
+while [[ -z "$GAS_PRICE" ]]; do
+    read -p "Gas Price (tidak boleh kosong): " GAS_PRICE
+    echo
+done
+
+INSTALL_DIR="/home/$EXECUTOR_USER/t3rn"
+SERVICE_FILE="/etc/systemd/system/t3rn-executor.service"
+ENV_FILE="/etc/t3rn-executor.env"
+EXECUTOR_VERSION="v0.77.1"
+EXECUTOR_FILE="executor-linux-$EXECUTOR_VERSION.tar.gz"
+EXECUTOR_URL="https://github.com/t3rn/executor-release/releases/download/$EXECUTOR_VERSION/$EXECUTOR_FILE"
+
+# Pastikan direktori ada
+mkdir -p "$INSTALL_DIR" && cd "$INSTALL_DIR"
+
+# Cek koneksi sebelum mengunduh
+if curl --output /dev/null --silent --head --fail "$EXECUTOR_URL"; then
+    echo "🔽 Mengunduh Executor dari $EXECUTOR_URL..."
+    curl -L -o "$EXECUTOR_FILE" "$EXECUTOR_URL"
+else
+    echo "❌ URL tidak dapat diakses, pastikan koneksi internet stabil."
+    exit 1
+fi
+
+# Ekstrak file
+echo "📦 Mengekstrak Executor..."
+tar -xzvf "$EXECUTOR_FILE" || {
+    echo "❌ Gagal mengekstrak file. Pastikan format file benar."
+    exit 1
+}
+
+# Bersihkan file unduhan
+rm -f "$EXECUTOR_FILE"
+
+# Pastikan direktori yang diperlukan ada sebelum masuk
+if [ -d "executor/executor/bin" ]; then
+    cd executor/executor/bin || exit 1
+    echo "✅ Executor berhasil diunduh dan diekstrak."
+else
+    echo "❌ Direktori 'executor/executor/bin' tidak ditemukan! Ekstraksi mungkin gagal."
+    exit 1
+fi
+
+# Konfigurasi environment file
+sudo bash -c "cat > $ENV_FILE" <<EOL
+RPC_ENDPOINTS='{
+  "l2rn": ["https://t3rn-b2n.blockpi.network/v1/rpc/public", "http://b2n.rpc.caldera.xyz/http"],
+  "mont": ["https://testnet-rpc.monad.xyz"],
+  "arbt": ["https://arbitrum-sepolia.drpc.org", "https://sepolia-rollup.arbitrum.io/rpc"],
+  "bast": ["https://base-sepolia-rpc.publicnode.com", "https://sepolia.base.org"],
+  "blst": ["https://sepolia.blast.io"],
+  "opst": ["https://sepolia.optimism.io", "https://optimism-sepolia-rpc.publicnode.com"],
+  "unit": ["https://unichain-sepolia.drpc.org", "https://unichain-sepolia-rpc.publicnode.com"],
+  "seit": ["https://evm-rpc-testnet.sei-apis.com"],
+  "bsct": ["https://binance-testnet-rpc.publicnode.com"]
+}'
+EXECUTOR_MAX_L3_GAS_PRICE="$GAS_PRICE"
+PRIVATE_KEY_LOCAL="$PRIVATE_KEY_LOCAL"
+ENABLED_NETWORKS="l2rn,arbitrum-sepolia,base-sepolia,optimism-sepolia,unichain-sepolia,blast-sepolia,sei-testnet,binance-testnet,monad-testnet"
+EOL
+
+# Berikan hak akses ke user
+sudo chown -R "$EXECUTOR_USER":"$EXECUTOR_USER" "$INSTALL_DIR"
+sudo chmod 600 "$ENV_FILE"
+
+# Buat systemd service
+sudo bash -c "cat > $SERVICE_FILE" <<EOL
+[Unit]
+Description=t3rn Executor Service
+After=network.target
+
+[Service]
+User=$EXECUTOR_USER
+WorkingDirectory=$INSTALL_DIR/executor/executor/bin
+ExecStart=$INSTALL_DIR/executor/executor/bin/executor
+Restart=always
+RestartSec=10
 export ENVIRONMENT=testnet
 export APP_NAME=local
 export INSTANCE=alfa
 export PRIVATE_KEY_LOCAL=
 export EXECUTOR_ENABLED_ASSETS=eth,t3eth,t3mon,mon,sei,t3sei,t3usd,t3btc
-export NETWORKS_DISABLED=base,optimism,arbitrum,blast-sepolia
-export EXECUTOR_ENABLED_NETWORKS="arbitrum-sepolia,base-sepolia,optimism-sepolia,unichain-sepolia,l2rn,sei-testnet,monad-testnet"
-export EXECUTOR_MAX_L3_GAS_PRICE=2000
 export LOG_LEVEL=info
 export LOG_PRETTY=false
 export EXECUTOR_PROCESS_BIDS_ENABLED=true
@@ -30,49 +114,18 @@ export EXECUTOR_PROCESS_ORDERS_API_ENABLED=false
 export EXECUTOR_PROCESS_PENDING_ORDERS_FROM_API=false
 export EXECUTOR_PROCESS_BIDS_API_ENABLED=false
 export EXECUTOR_MIN_BALANCE_THRESHOLD_ETH=0
-export EXECUTOR_ENABLE_BIDDING_PROCESSING=false
+export EXECUTOR_ENABLE_BIDDING_PROCESSING=false 
 
+[Install]
+WantedBy=multi-user.target
+EOL
 
-# Add RPC endpoints
-echo "Configuring RPC endpoints..."
-export RPC_ENDPOINTS='{
-    "l2rn": ["https://t3rn-b2n.blockpi.network/v1/rpc/public", "https://b2n.rpc.caldera.xyz/http"],
-    "arbt": ["https://arbitrum-sepolia.drpc.org", "https://sepolia-rollup.arbitrum.io/rpc"],
-    "bast": ["https://base-sepolia-rpc.publicnode.com", "https://base-sepolia.drpc.org"],
-    "blst": ["https://sepolia.blast.io", "https://blast-sepolia.drpc.org"],
-    "mont": ["https://testnet-rpc.monad.xyz"],
-    "opst": ["https://sepolia.optimism.io", "https://optimism-sepolia.drpc.org"],
-    "unit": ["https://unichain-sepolia.drpc.org", "https://sepolia.unichain.org"]
-}'
+# Reload systemd dan jalankan service
+sudo systemctl daemon-reload
+sudo systemctl enable t3rn-executor.service
+sudo systemctl start t3rn-executor.service
 
-# Display ASCII art and info
-echo "Starting T3rn executor setup..."
-cat << 'EOF'
-
-██ ███    ██ ██    ██ ██  ██████ ████████ ██    ██ ███████     ██       █████  ██████  ███████ 
-██ ████   ██ ██    ██ ██ ██         ██    ██    ██ ██          ██      ██   ██ ██   ██ ██      
-██ ██ ██  ██ ██    ██ ██ ██         ██    ██    ██ ███████     ██      ███████ ██████  ███████ 
-██ ██  ██ ██  ██  ██  ██ ██         ██    ██    ██      ██     ██      ██   ██ ██   ██      ██ 
-██ ██   ████   ████   ██  ██████    ██     ██████  ███████     ███████ ██   ██ ██████  ███████ 
-
-=== T3rn Testnet V2 ===
-EOF
-sleep 1
-
-# Ask user for private key securely
-read -s -p "Enter your T3rn Wallet Private Key: " PRIVATE_KEY_LOCAL
-echo
-export PRIVATE_KEY_LOCAL
-
-# Start executor in a Screen session
-echo "Starting T3rn executor in Screen session..."
-screen -dmS t3rn bash -c "./executor; exec bash"
-
-# Wait briefly and check if it’s running
-sleep 5
-if screen -list | grep -q "t3rn"; then
-    echo "Executor started successfully in Screen session 't3rn'. Use 'screen -r t3rn' to attach."
-else
-    echo "Executor failed to start. Check logs or retry."
-    exit 1
-fi
+# Tampilkan status layanan dan log secara real-time
+echo "✅ Executor berhasil diinstall. Menampilkan status dan log..."
+sudo systemctl status t3rn-executor.service --no-pager
+sudo journalctl -u t3rn-executor.service -f --no-hostname -o cat
