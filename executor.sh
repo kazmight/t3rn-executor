@@ -100,21 +100,16 @@ WorkingDirectory=$INSTALL_DIR/executor/executor/bin
 ExecStart=$INSTALL_DIR/executor/executor/bin/executor
 Restart=always
 RestartSec=10
-export ENVIRONMENT=testnet
-export APP_NAME=local
-export INSTANCE=alfa
-export PRIVATE_KEY_LOCAL=
-export EXECUTOR_ENABLED_ASSETS=eth,t3eth,t3mon,mon,sei,t3sei,t3usd,t3btc
-export LOG_LEVEL=info
-export LOG_PRETTY=false
-export EXECUTOR_PROCESS_BIDS_ENABLED=true
-export EXECUTOR_PROCESS_ORDERS_ENABLED=true
-export EXECUTOR_PROCESS_CLAIMS_ENABLED=true
-export EXECUTOR_PROCESS_ORDERS_API_ENABLED=false
-export EXECUTOR_PROCESS_PENDING_ORDERS_FROM_API=false
-export EXECUTOR_PROCESS_BIDS_API_ENABLED=false
-export EXECUTOR_MIN_BALANCE_THRESHOLD_ETH=0
-export EXECUTOR_ENABLE_BIDDING_PROCESSING=false 
+Environment=ENVIRONMENT=testnet
+Environment=LOG_LEVEL=debug
+Environment=LOG_PRETTY=false
+Environment=EXECUTOR_PROCESS_BIDS_ENABLED=true
+Environment=EXECUTOR_PROCESS_ORDERS_ENABLED=true
+Environment=EXECUTOR_PROCESS_CLAIMS_ENABLED=true
+Environment=EXECUTOR_PROCESS_PENDING_ORDERS_FROM_API=false
+Environment=EXECUTOR_PROCESS_ORDERS_API_ENABLED=false
+EnvironmentFile=$ENV_FILE
+Environment=ENABLED_NETWORKS=l2rn,arbitrum-sepolia,base-sepolia,blst-sepolia,optimism-sepolia,unichain-sepolia,monad-testnet 
 
 [Install]
 WantedBy=multi-user.target
